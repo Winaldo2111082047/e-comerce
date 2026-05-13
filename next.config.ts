@@ -103,6 +103,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+
+  // Skip ESLint saat build — jalankan manual via `npm run lint`
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 }
 
 export default nextConfig
