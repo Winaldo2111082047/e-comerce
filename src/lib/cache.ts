@@ -12,7 +12,7 @@
  * - 'reviews'     → semua review
  */
 
-import { unstable_cache } from 'next/cache'
+import { unstable_cache, revalidateTag } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import type { GetProductsOptions } from '@/services/product.service'
 
@@ -169,27 +169,16 @@ function buildOrderBy(sort?: string) {
  * Panggil setelah create/update/delete produk.
  */
 export async function revalidateProductCache(slug?: string) {
-  const { revalidateTag } = await import('next/cache')
   revalidateTag('products')
   if (slug) revalidateTag(`product-${slug}`)
 }
 
-/**
- * Invalidate cache kategori.
- * Panggil setelah create/update/delete kategori.
- */
 export async function revalidateCategoryCache() {
-  const { revalidateTag } = await import('next/cache')
   revalidateTag('categories')
-  revalidateTag('products') // produk include kategori
+  revalidateTag('products')
 }
 
-/**
- * Invalidate cache review.
- * Panggil setelah submit/delete review.
- */
 export async function revalidateReviewCache(productSlug?: string) {
-  const { revalidateTag } = await import('next/cache')
   revalidateTag('reviews')
   if (productSlug) revalidateTag(`product-${productSlug}`)
 }
