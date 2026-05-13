@@ -97,6 +97,12 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
+
+  // Skip typecheck saat build — jalankan manual via `npm run typecheck`
+  // Diperlukan karena Next.js dev types menyebabkan false positive di Vercel
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 }
 
 export default nextConfig
