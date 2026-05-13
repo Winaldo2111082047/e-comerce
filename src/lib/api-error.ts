@@ -85,7 +85,7 @@ export function apiError(
       success: false,
       error: message,
       ...(code && { code }),
-      ...(process.env.NODE_ENV === 'development' && details && { details }),
+      ...(process.env.NODE_ENV === 'development' && details !== undefined ? { details } : {}),
     },
     { status }
   )
