@@ -1,0 +1,311 @@
+// Prisma 7 schema — url configured in prisma.config.ts
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING      // Menunggu pembayaran
+  PAID         // Sudah dibayar, menunggu diproses
+  PROCESSING   // Sedang diproses/dikemas
+  SHIPPED      // Sedang dikirim
+  DELIVERED    // Sudah diterima
+  CANCELLED    // Dibatalkan
+}
+
+enum PaymentStatus {
+  PENDING    // Menunggu pembayaran
+  SUCCESS    // Pembayaran berhasil
+  FAILED     // Pembayaran gagal
+  EXPIRED    // Kadaluarsa
+  REFUNDED   // Dana dikembalikan
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CREDIT_CARD
+  E_WALLET
+  COD          // Cash on Delivery
+  QRIS
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  image     String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart      Cart?
+  orders    Order[]
+  addresses Address[]
+  wishlists Wishlist[]
+  reviews   Review[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// ADDRESS (alamat pengiriman tersimpan)
+// ─────────────────────────────────────────────
+
+model Address {
+  id         String   @id @default(cuid())
+  label      String   // e.g. "Rumah", "Kantor"
+  recipient  String   // nama penerima
+  phone      String
+  street     String
+  city       String
+  province   String
+  postalCode String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orders     Order[]
+
+  @@map("addresses")
+}
+
+// ─────────────────────────────────────────────
+// CATEGORY
+// ─────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  image       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@map("categories")
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT
+// ─────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  weight      Int?     // berat dalam gram, untuk kalkulasi ongkir
+  image       String?  // gambar utama
+  images      String[] // gambar tambahan
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Foreign key
+  categoryId  String
+  // Relations
+  category    Category    @relation(fields: [categoryId], references: [id])
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  wishlists   Wishlist[]
+  reviews     Review[]
+
+  @@map("products")
+}
+
+// ─────────────────────────────────────────────
+// CART
+// ─────────────────────────────────────────────
+
+model Cart {
+  id        String     @id @default(cuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Foreign key
+  userId    String     @unique
+  // Relations
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Foreign keys
+  cartId    String
+  productId String
+  // Relations
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+// ─────────────────────────────────────────────
+// ORDER
+// ─────────────────────────────────────────────
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique // e.g. "ORD-20240509-0001"
+  status         OrderStatus @default(PENDING)
+  subtotal       Decimal     @db.Decimal(10, 2) // total sebelum ongkir
+  shippingCost   Decimal     @db.Decimal(10, 2) @default(0)
+  totalAmount    Decimal     @db.Decimal(10, 2) // subtotal + shippingCost
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Foreign keys
+  userId         String
+  addressId      String?     // null jika COD tanpa alamat tersimpan
+  // Snapshot alamat saat order dibuat (agar tidak berubah jika user edit alamat)
+  snapRecipient  String?
+  snapPhone      String?
+  snapAddress    String?
+  snapCity       String?
+  snapProvince   String?
+  snapPostalCode String?
+
+  // Relations
+  user           User        @relation(fields: [userId], references: [id])
+  address        Address?    @relation(fields: [addressId], references: [id])
+  items          OrderItem[]
+  payment        Payment?
+
+  @@map("orders")
+}
+
+// ─────────────────────────────────────────────
+// ORDER ITEM
+// ─────────────────────────────────────────────
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  quantity     Int
+  pricePerItem Decimal @db.Decimal(10, 2) // snapshot harga saat order
+  subtotal     Decimal @db.Decimal(10, 2) // quantity * pricePerItem
+
+  // Foreign keys
+  orderId      String
+  productId    String
+  // Snapshot nama produk saat order (agar tidak berubah jika produk diedit)
+  productName  String
+  productImage String?
+
+  // Relations
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT
+// ─────────────────────────────────────────────
+
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Decimal       @db.Decimal(10, 2)
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  // Data dari payment gateway (Midtrans, dll)
+  externalId    String?       @unique // transaction ID dari gateway
+  paymentUrl    String?       // URL redirect ke halaman bayar
+  vaNumber      String?       // nomor virtual account
+  bank          String?       // nama bank
+  expiredAt     DateTime?     // batas waktu pembayaran
+  paidAt        DateTime?     // waktu pembayaran berhasil
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Foreign key — 1 order punya 1 payment
+  orderId       String        @unique
+  // Relations
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────
+// WISHLIST
+// ─────────────────────────────────────────────
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Foreign keys
+  userId    String
+  productId String
+
+  // Relations
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Satu user hanya bisa wishlist satu produk sekali
+  @@unique([userId, productId])
+  @@map("wishlists")
+}
+
+// ─────────────────────────────────────────────
+// REVIEW
+// ─────────────────────────────────────────────
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1–5
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Foreign keys
+  userId    String
+  productId String
+
+  // Relations
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Satu user hanya bisa review satu produk sekali
+  @@unique([userId, productId])
+  @@map("reviews")
+}
