@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { Geist } from 'next/font/google'
 import { Toaster } from 'sonner'
+import { Analytics } from '@vercel/analytics/next'
 import ThemeProvider from '@/components/ui/ThemeProvider'
+import GoogleAnalytics from '@/components/analytics/GoogleAnalytics'
 import { buildBaseMetadata, buildWebsiteJsonLd, buildOrganizationJsonLd } from '@/lib/seo'
 import './globals.css'
 
@@ -50,6 +52,12 @@ export default function RootLayout({
             }}
           />
         </ThemeProvider>
+        {/* Vercel Analytics — gratis, no config needed */}
+        <Analytics />
+        {/* Google Analytics — hanya aktif jika env var di-set */}
+        <GoogleAnalytics
+          measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? ''}
+        />
       </body>
     </html>
   )
